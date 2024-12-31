@@ -9,6 +9,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 import logging
+from googlemaps import Client
+from typing import list,Dict
+import os
 from linkedin_api import Linkedin
 import facebook_scraper as fs
 
@@ -31,7 +34,25 @@ class ClinicScraper:
         self.driver = webdriver.Chrome(options=options)
         
     def get_google_maps_data(self, search_query, max_results=100):
-        pass
+        if not hasattr(self, 'gmaps_client'):
+            api_key = os.environ.get('GOOGLE_MAPS_API_KEY')
+            self.gmaps_client = Client(api_key)
+        places_result = []
+        next_page_token = None
+        while len(places_result)< max_results:
+            response = self.gmaps_client.places(search_query, page_token=next_page_token)
+            places_result.extend([{
+                'name':place['name'],
+                'address': place.get('formatted_address', ''),
+                'rating': place.get('rating', 0.0),
+                'location': place['geometry']['location'],
+                'place_id': place['place_id']
+            }for place in response.get('results', [])])
+            next_page_token  = response.get('next_page_token')
+            if not next_page_token:
+                break
+        return places_result[:max_results]
+        
         
     def enrich_with_linkedin(self, company_name):
         try:
@@ -44,7 +65,7 @@ class ClinicScraper:
     def find_facebook_page(self, company_name, location):
         try:
             # Note: Would need Facebook API credentials
-            pass
+            pass                    
             
         except Exception as e:
             logging.error(f"Facebook error for {company_name}: {e}")
